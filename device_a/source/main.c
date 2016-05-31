@@ -279,6 +279,31 @@ static void decode_and_answer_identification(frame_t *frame)
 {
     uint8_t c;
     char str[8];
+    uint8_t *pbuf = frame->buffer;
+
+    // troca dst/src
+    c = frame->cmd.dst;
+    buf_io_put8_tb_apr(frame->cmd.src, pbuf);
+    buf_io_put8_tb_apr(c, pbuf);
+    buf_io_put8_tb_apr(22, pbuf);
+    //complet_string(&str, MODEL);
+    strncpy(pbuf,MODEL "        ",8);
+    //strncpy(pbuf,str,8);
+    pbuf += 8;
+    strncpy(pbuf,"        ",8);
+    strncpy(pbuf,str,8);
+    pbuf += 8;
+    buf_io_put32_tb_apr(id, pbuf);
+    buf_io_put8_tb_apr(REV, pbuf);
+    buf_io_put8_tb_apr(POINT, pbuf);
+    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+    send_frame(frame);
+}
+#if 0
+static void decode_and_answer_identification(frame_t *frame)
+{
+    uint8_t c;
+    char str[8];
 
     // troca dst/src
     c = frame->cmd.dst;
@@ -313,7 +338,7 @@ static void decode_and_answer_identification(frame_t *frame)
     // envia
     send_frame(frame);
 }
-
+#endif
 static void answer_frame(frame_t *frame)
 {
     switch(frame->cmd.reg)
