@@ -17,24 +17,9 @@
 
 #define CMD_ITF_VER          0x00
 #define CMD_IDENT            0x01
-#define CMD_POINT_DESC_BASE  0x10
+#define CMD_POINT_DESC_BASE  0x0F
 #define CMD_POINT_READ_BASE  0x30
 #define CMD_POINT_WRITE_BASE 0x50
-
-//Sensor Version
-#define CMD_VERSION 1
-
-//Sensor Identification
-#define MODEL  "STARKIL1"
-#define MANUF  "EMPIRE"
-//#define ID     3237998090
-#define ID     1666111666
-#define REV    2
-#define POINT  15
-
-//Sensor Point Description
-
-
 
 
 typedef struct cmd_s

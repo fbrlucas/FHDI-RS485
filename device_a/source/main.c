@@ -1,27 +1,70 @@
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include "main.h"
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_usart.h"
 #include "circ_buffer.h"
 #include "crc16.h"
+#include "device_info.h"
 
 // Debug tip:
 // Connect to target, reset (black button), then load and press c
-
+uint32_t id = ID;
 uint8_t cb_area[CMD_MAX_SIZE];
 volatile uint8_t new_frame = 0;
 circ_buffer_t cb;
 frame_t frame;
 
-uint32_t id = ID;
-uint8_t crc1[2];
-//char model[8] = {'F','H','D','I',' ',' ',' ',' '};
+//Put here the name of the structs declarated in device_info.c file.
+//-------------------------------------------------------------------------------
+//extern point_t point_1;
+//extern point_t point_2;
+extern point_t points[N_POINT];
+//-------------------------------------------------------------------------------
 
 static void SystemClock_Config(void);
 static void Error_Handler(void);
 
 UART_HandleTypeDef uart_dev3;
+
+/*
+static void initialize_points(){
+	char address[] = P_ADDRESSES;
+	uint8_t j = 0;
+	uint8_t x = strlen(address);
+	uint8_t count=0;
+	uint8_t ad[2];
+	address[4] = ' ';
+
+	for(int i = 0; i <= x; i++){
+		if((address[i] != ',')&&(address[i] != ' '))
+		{
+			ad[j] = address[i];
+			j++;
+		}
+		else
+		{
+			points[count].address = atoi(ad);
+			count++;
+			j = 0;
+		}
+	}
+	uint8_t add;
+	for(int k = 0; k <= N_POINT; k++){
+		add = points[k].address;
+		strncpy(points[k].name, P_NAME(add) "        ", 8);
+	}
+
+	for(int i = 0; i < N_POINT; i++){
+		for(int k = 0; k < 8; k++){
+			points[i].name[k] = ?;
+		}
+		points[i].type = P_TYPE(ad);
+	}
+
+
+}*/
 
 static void setup_uart(void)
 {
@@ -161,18 +204,10 @@ static void send_frame(frame_t *frame)
     for(n = 0 ; n < (CMD_HDR_SIZE+frame->cmd.size) ; n++)
         uart3_send_byte(frame->buffer[n], 1);
 
-#if 0
     // crc (escape tamb�m pode existir)
     uart3_send_byte(frame->cmd.crc >> 8, 1);
     uart3_send_byte(frame->cmd.crc & 0xFF, 1);
-#endif
-#if 1
-    //-------------------------------------------------------------------------------------
-    uart3_send_byte(crc1[1], 1);
-    uart3_send_byte(crc1[0] & 0xFF, 1);
-    //-------------------------------------------------------------------------------------
-#endif
-    
+
     // fim do frame, sem escape
     uart3_send_byte(FRAME_FLAG, 0);
 
@@ -184,7 +219,7 @@ static void send_frame(frame_t *frame)
 static uint8_t check_frame(circ_buffer_t *cb, frame_t *frame)
 {
     uint16_t crc;
-    uint8_t n;
+    uint8_t n, x = 0;
     
     // destino
     if(circ_buffer_get(cb, &(frame->cmd.dst)) != CIRC_BUFFER_OK)
@@ -215,6 +250,21 @@ static uint8_t check_frame(circ_buffer_t *cb, frame_t *frame)
         if(circ_buffer_get(cb, &(frame->cmd.payload[n])) != CIRC_BUFFER_OK)
             return 0;
     }
+
+    //Verificar se existe o ponto solicitado
+    for (int i = 0; i <= N_POINT; i++)
+    {
+    	if (frame->cmd.reg == ((points[i].address) + CMD_POINT_DESC_BASE))
+    	{
+    		x = 1;
+    	}
+    }
+    if(x != 1)
+    {
+    	x = 0;
+    	return 0;
+    }
+
  
     // ler o CRC (big endian, 16 bits)
     if(circ_buffer_get(cb, &n) != CIRC_BUFFER_OK)
@@ -237,6 +287,33 @@ static uint8_t check_frame(circ_buffer_t *cb, frame_t *frame)
     return 1;
 }
 
+static uint8_t check_points()
+{
+	//Check the existence of the same addresses points
+	uint8_t i, j;
+
+    for (i = 0; i <= N_POINT; i++)
+    {
+        for (j = i + 1; j < N_POINT; j++)
+        {
+            if (points[j].address == points[i].address)
+            {
+            	return 0;
+            }
+        }
+    }
+    //Check if Data Types are suported and access rights
+    for (i = 0; i <= N_POINT; i++)
+    {
+    	if ((points[i].type > 10) || (points[i].rights > 3))
+    	{
+    		return 0;
+    	}
+    }
+    return 1;
+}
+
+#if 0
 void complet_string(char *str1, char x[8]){
 	uint8_t n;
 	char spaces[8] = {' ',' ',' ',' ',' ',' ',' ',' '};
@@ -244,7 +321,7 @@ void complet_string(char *str1, char x[8]){
     n = (8- strlen(str1));
     strncat(str1, spaces, n);
 }
-
+#endif
 static void decode_and_answer_version(frame_t *frame)
 {
     uint8_t c;
@@ -268,8 +345,6 @@ static void decode_and_answer_version(frame_t *frame)
     buf_io_put8_tb(1, &frame->cmd.size);
 	//buf_io_put16_tb(crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size), &frame->cmd.crc);
 	frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
-    buf_io_put8_tb((frame->cmd.crc), &crc1[0]);
-    buf_io_put8_tb((frame->cmd.crc >> 8), &crc1[1]);
 #endif
     // envia
     send_frame(frame);
@@ -277,26 +352,32 @@ static void decode_and_answer_version(frame_t *frame)
 
 static void decode_and_answer_identification(frame_t *frame)
 {
-    uint8_t c;
-    char str[8];
+    //char str[8];
+    uint8_t s;
     uint8_t *pbuf = frame->buffer;
 
     // troca dst/src
-    c = frame->cmd.dst;
-    buf_io_put8_tb_apr(frame->cmd.src, pbuf);
-    buf_io_put8_tb_apr(c, pbuf);
-    buf_io_put8_tb_apr(22, pbuf);
-    //complet_string(&str, MODEL);
+    s = frame->cmd.dst;
+    buf_io_put8_tb(frame->cmd.src, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(s, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(frame->cmd.reg, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(22, pbuf);
+    pbuf += 1;
     strncpy(pbuf,MODEL "        ",8);
-    //strncpy(pbuf,str,8);
     pbuf += 8;
-    strncpy(pbuf,"        ",8);
-    strncpy(pbuf,str,8);
+    strncpy(pbuf,MANUF "        ",8);
     pbuf += 8;
-    buf_io_put32_tb_apr(id, pbuf);
-    buf_io_put8_tb_apr(REV, pbuf);
-    buf_io_put8_tb_apr(POINT, pbuf);
+    buf_io_put32_tb(id, pbuf);
+    pbuf += 4;
+    buf_io_put8_tb(REV, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(N_POINT, pbuf);
+    pbuf += 1;
     frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+
     send_frame(frame);
 }
 #if 0
@@ -339,8 +420,76 @@ static void decode_and_answer_identification(frame_t *frame)
     send_frame(frame);
 }
 #endif
+
+static void decode_and_answer_description(frame_t *frame, uint8_t p_address)
+{
+    uint8_t s;
+    uint8_t *pbuf = frame->buffer;
+
+    // troca dst/src
+    s = frame->cmd.dst;
+    buf_io_put8_tb(frame->cmd.src, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(s, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(frame->cmd.reg, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(11, pbuf);
+    pbuf += 1;
+
+    for(int i = 0; i < N_POINT; i++)
+    {
+    	if(points[i].address == p_address)
+    	{
+    		s = i;
+    	}
+    }
+
+    strncpy(pbuf,points[s].name,8);
+    pbuf += 8;
+    buf_io_put8_tb(points[s].type, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(points[s].unit, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(points[s].rights, pbuf);
+    pbuf += 1;
+    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+
+    send_frame(frame);
+}
+
 static void answer_frame(frame_t *frame)
 {
+
+	if(frame->cmd.reg == CMD_ITF_VER){
+		decode_and_answer_version(frame);
+	}
+	else if(frame->cmd.reg == CMD_IDENT){
+		decode_and_answer_identification(frame);
+	}
+	else
+	{
+		for(int i=1; i<32; i++)
+		{
+			if(frame->cmd.reg == CMD_POINT_DESC_BASE+i)
+			{
+				decode_and_answer_description(frame, i);
+				break;
+			}
+			if(frame->cmd.reg == CMD_POINT_READ_BASE+i)
+			{
+				//decode_and_answer_description(frame, i);
+				break;
+			}
+			if(frame->cmd.reg == CMD_POINT_WRITE_BASE+i)
+			{
+				//decode_and_answer_description(frame, i);
+				break;
+			}
+		}
+	}
+
+	#if 0
     switch(frame->cmd.reg)
     { 
         case CMD_ITF_VER:
@@ -348,13 +497,18 @@ static void answer_frame(frame_t *frame)
             break;          
         case CMD_IDENT:
         	decode_and_answer_identification(frame);
-            break;            
-        case CMD_POINT_DESC_BASE:
-        case CMD_POINT_DESC_BASE+1:
-        case CMD_POINT_DESC_BASE+2:
-        //case CMD_POINT_DESC_BASE+n:
-        // uint8_t p = frame->cmd.reg - CMD_POINT_DESC_BASE;        
-            break;  
+            break;
+        //case CMD_POINT_DESC_BASE
+
+        //for(int i=0; i<31; i++){
+			//case point_desc+i:
+			//decode_and_answer_description(frame, i);
+			//case CMD_POINT_DESC_BASE+1:
+			//case CMD_POINT_DESC_BASE+2:
+		case (num2+num):
+			// uint8_t p = frame->cmd.reg - CMD_POINT_DESC_BASE;
+			break;
+
         case CMD_POINT_READ_BASE:
         case CMD_POINT_READ_BASE+1:
         case CMD_POINT_READ_BASE+2:
@@ -370,6 +524,7 @@ static void answer_frame(frame_t *frame)
         default:
             break;
     }
+#endif
 }
 
 static void setup_leds(void)
@@ -407,27 +562,30 @@ int main(void)
     //Enable RX
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10, GPIO_PIN_RESET); 
 
-    while(1)
-    {
-        if(new_frame)
+    if(check_points()){
+        while(1)
         {
-            // indica a comunicacao
-            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);    
+            if(new_frame)
+            {
+                // indica a comunicacao
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
 
-            // se o frame for consistente, chama a rotina de tratamento de resposta
-            if(check_frame(&cb, &frame))
-                answer_frame(&frame);
-    
-            // esvazia o buffer
-            circ_buffer_flush(&cb);
+                // se o frame for consistente, chama a rotina de tratamento de resposta
+                if(check_frame(&cb, &frame))
+                    answer_frame(&frame);
 
-            // libera a recepção novamente
-            new_frame = 0;
-            
-            // indica a comunicacao
-            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);    
+                // esvazia o buffer
+                circ_buffer_flush(&cb);
+
+                // libera a recepção novamente
+                new_frame = 0;
+
+                // indica a comunicacao
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
+            }
         }
     }
+
     
     return 0;
 }
