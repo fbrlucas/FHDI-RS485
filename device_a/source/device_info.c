@@ -13,7 +13,7 @@
 //Initialize here, the value of the struct points inside the array
 //point_t point_1 = {1,"TEMP",8,32,2,0};
 //point_t point_2 = {2,"UMID",8,57,0,0};
-point_t points[N_POINT] = {3,"TEMP",8,32,2,0, 7,"UMID",8,57,0,0};
+point_t points[N_POINT] = {3,"TEMP",7,32,2,0, 7,"UMID",8,57,0,0};
 
 //The first variable (address) is a number from 1 to 32 (0x10 to 0x2F)
 

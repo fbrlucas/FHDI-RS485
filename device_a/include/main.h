@@ -17,9 +17,9 @@
 
 #define CMD_ITF_VER          0x00
 #define CMD_IDENT            0x01
-#define CMD_POINT_DESC_BASE  0x0F
-#define CMD_POINT_READ_BASE  0x30
-#define CMD_POINT_WRITE_BASE 0x50
+#define CMD_POINT_DESC_BASE  0x0F //0x10
+#define CMD_POINT_READ_BASE  0x2F //0x30
+#define CMD_POINT_WRITE_BASE 0x4F //0x50
 
 
 typedef struct cmd_s

@@ -24,6 +24,21 @@ extern "C" {
 #define N_POINT  2 //Contar quantos points tinha
 
 
+typedef union point_type_u
+{
+	uint8_t _ui8; //byte
+	int8_t  _i8; //byte
+	uint16_t _us16; //short
+	int16_t _s16; //short
+	uint32_t _ul32; //long
+	int32_t _l32; //long
+	uint64_t _ull64; //long long
+	int64_t _ll64; //long long
+	float _f;
+	double _d;
+	//uint32_t ui32;
+} point_type_t;
+
 typedef struct point_s
 {
 	uint8_t address;
@@ -31,10 +46,8 @@ typedef struct point_s
     uint8_t type;
     uint8_t unit;
     uint8_t rights;
-    uint8_t value;
+    point_type_t value;
 } point_t;
-
-
 #ifdef __cplusplus
 }
 #endif

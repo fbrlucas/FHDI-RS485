@@ -241,7 +241,7 @@ static uint8_t check_frame(circ_buffer_t *cb, frame_t *frame)
     if(circ_buffer_get(cb, &(frame->cmd.size)) != CIRC_BUFFER_OK)
         return 0;
     
-    // verificar consistÃªncia do tamanho aqui !
+    // verificar consistÃªncia do tamanho aqui ! ---------------------------------------------------------------FAZER--------------------------------------------------------
     // TODO
     
     // payload (size bytes)
@@ -252,17 +252,20 @@ static uint8_t check_frame(circ_buffer_t *cb, frame_t *frame)
     }
 
     //Verificar se existe o ponto solicitado
-    for (int i = 0; i <= N_POINT; i++)
+    if(((frame->cmd.reg) >= 0x10) && ((frame->cmd.reg) <= 0x6F))
     {
-    	if (frame->cmd.reg == ((points[i].address) + CMD_POINT_DESC_BASE))
-    	{
-    		x = 1;
-    	}
-    }
-    if(x != 1)
-    {
-    	x = 0;
-    	return 0;
+		for (int i = 0; i <= N_POINT; i++)
+		{
+			if ((frame->cmd.reg == ((points[i].address) + CMD_POINT_DESC_BASE)) || (frame->cmd.reg == ((points[i].address) + CMD_POINT_READ_BASE)) || (frame->cmd.reg == ((points[i].address) + CMD_POINT_WRITE_BASE)))
+			{
+				x = 1;
+			}
+		}
+		if(x != 1)
+		{
+			x = 0;
+			return 0;
+		}
     }
 
  
@@ -375,7 +378,6 @@ static void decode_and_answer_identification(frame_t *frame)
     buf_io_put8_tb(REV, pbuf);
     pbuf += 1;
     buf_io_put8_tb(N_POINT, pbuf);
-    pbuf += 1;
     frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
 
     send_frame(frame);
@@ -436,7 +438,6 @@ static void decode_and_answer_description(frame_t *frame, uint8_t p_address)
     pbuf += 1;
     buf_io_put8_tb(11, pbuf);
     pbuf += 1;
-
     for(int i = 0; i < N_POINT; i++)
     {
     	if(points[i].address == p_address)
@@ -444,19 +445,184 @@ static void decode_and_answer_description(frame_t *frame, uint8_t p_address)
     		s = i;
     	}
     }
-
-    strncpy(pbuf,points[s].name,8);
+    strncpy(pbuf, points[s].name, 8);
     pbuf += 8;
     buf_io_put8_tb(points[s].type, pbuf);
     pbuf += 1;
     buf_io_put8_tb(points[s].unit, pbuf);
     pbuf += 1;
     buf_io_put8_tb(points[s].rights, pbuf);
-    pbuf += 1;
     frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
 
     send_frame(frame);
 }
+
+
+static void decode_and_answer_read(frame_t *frame, uint8_t p_address)
+{
+	uint8_t s, x = 0;
+	uint8_t *pbuf = frame->buffer;
+
+    // troca dst/src
+    s = frame->cmd.dst;
+    buf_io_put8_tb(frame->cmd.src, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(s, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(frame->cmd.reg, pbuf);
+    pbuf += 3; //Pula 3 bytes diretamente para o value
+
+    for(int i = 0; i < N_POINT; i++)
+    {
+    	if(points[i].address == p_address) //Find the position in array correspondent of the point address
+    	{
+    		s = i;
+    	}
+    }
+
+    if(points[s].type == 0x00)
+    {
+    	buf_io_put8_tb(points[s].value._ui8, pbuf); //Access the value in uint8 mode (type 0)
+    	x = 1; 	//Size of byte variable
+    }
+    else if(points[s].type == 0x01)
+    {
+    	buf_io_put8_tb(points[s].value._i8, pbuf); //Access the value in uint8 mode (type 1)
+    	x = 1; 	//Size of byte variable
+    }
+    else if(points[s].type == 0x02)
+    {
+    	buf_io_put16_tb(points[s].value._us16, pbuf); //Access the value in uint8 mode (type 2)
+    	x = 2; 	//Size of short variable
+    }
+    else if(points[s].type == 0x03)
+    {
+    	buf_io_put16_tb(points[s].value._s16, pbuf); //Access the value in uint8 mode (type 3)
+    	x = 2; 	//Size of short variable
+    }
+    else if(points[s].type == 0x04)
+    {
+    	buf_io_put32_tb(points[s].value._ul32, pbuf); //Access the value in uint8 mode (type 4)
+    	x = 4; 	//Size of long variable
+    }
+    else if(points[s].type == 0x05)
+    {
+    	buf_io_put32_tb(points[s].value._l32, pbuf); //Access the value in uint8 mode (type 5)
+    	x = 4; 	//Size of long variable
+    }
+    else if(points[s].type == 0x06)
+    {
+    	buf_io_put64_tb(points[s].value._ull64, pbuf); //Access the value in uint8 mode (type 6)
+    	x = 8; 	//Size of long long variable
+    }
+    else if(points[s].type == 0x07)
+    {
+    	buf_io_put64_tb(points[s].value._ll64, pbuf); //Access the value in uint8 mode (type 7)
+    	x = 8; 	//Size of long long variable
+    }
+    else if(points[s].type == 0x08)
+    {
+    	buf_io_putf_tb(points[s].value._f, pbuf); //Access the value in uint8 mode (type 8)
+    	x = 4; 	//Size of float variable
+    }
+    else if(points[s].type == 0x09)
+    {
+    	buf_io_putd_tb(points[s].value._d, pbuf); //Access the value in uint8 mode (type 9)
+    	x = 8; 	//Size of double variable
+    }
+
+    pbuf -= 2; //Retorna o ponteiro para a posição do size no buffer
+    buf_io_put8_tb((1+x), pbuf);
+    pbuf += 1;
+	buf_io_put8_tb(points[s].type, pbuf);
+
+    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+    send_frame(frame);
+}
+
+
+static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
+{
+	uint8_t s, x = 0;
+	uint8_t *pbuf = frame->buffer;
+
+    // troca dst/src
+    s = frame->cmd.dst;
+    buf_io_put8_tb(frame->cmd.src, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(s, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(frame->cmd.reg, pbuf);
+    pbuf += 1;
+    buf_io_put8_tb(0, pbuf);
+    pbuf += 1;
+
+    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+    send_frame(frame);
+
+
+
+    for(int i = 0; i < N_POINT; i++)
+    {
+    	if(points[i].address == p_address) //Find the position in array correspondent of the point address
+    	{
+    		s = i;
+    	}
+    }
+
+    if(*pbuf == 0x00)
+    {
+    	pbuf += 1;
+        buf_io_put8_tb(buf_io_get8_fb(pbuf), &points[s].value._ui8);
+    }
+    else if(*pbuf == 0x01)
+    {
+    	pbuf += 1;
+        buf_io_put8_tb(buf_io_get8_fb(pbuf), &points[s].value._i8);
+    }
+    else if(*pbuf == 0x02)
+    {
+    	pbuf += 1;
+        buf_io_put16_tb(buf_io_get16_fb(pbuf), &points[s].value._us16);
+    }
+    else if(*pbuf == 0x03)
+    {
+    	pbuf += 1;
+        buf_io_put16_tb(buf_io_get16_fb(pbuf), &points[s].value._s16);
+    }
+    else if(*pbuf == 0x04)
+    {
+    	pbuf += 1;
+        buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ul32);
+    }
+    else if(*pbuf == 0x05)
+    {
+    	pbuf += 1;
+        buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._l32);
+    }
+    else if(*pbuf == 0x06)
+    {
+    	pbuf += 1;
+        buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ull64);
+    }
+    else if(*pbuf == 0x07)
+    {
+    	pbuf += 1;
+        buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ll64);
+    }
+    else if(*pbuf == 0x08)
+    {
+    	pbuf += 1;
+        buf_io_putf_tb(buf_io_getf_fb(pbuf), &points[s].value._f);
+    }
+    else if(*pbuf == 0x09)
+    {
+    	pbuf += 1;
+        buf_io_putd_tb(buf_io_getd_fb(pbuf), &points[s].value._d);
+    }
+
+}
+
 
 static void answer_frame(frame_t *frame)
 {
@@ -478,12 +644,12 @@ static void answer_frame(frame_t *frame)
 			}
 			if(frame->cmd.reg == CMD_POINT_READ_BASE+i)
 			{
-				//decode_and_answer_description(frame, i);
+				decode_and_answer_read(frame, i);
 				break;
 			}
 			if(frame->cmd.reg == CMD_POINT_WRITE_BASE+i)
 			{
-				//decode_and_answer_description(frame, i);
+				decode_and_answer_write(frame, i);
 				break;
 			}
 		}
