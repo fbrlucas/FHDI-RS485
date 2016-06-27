@@ -539,10 +539,9 @@ static void decode_and_answer_read(frame_t *frame, uint8_t p_address)
     		pf -= 1;
 
     		*pbuf = *pf;
-    		pbuf += 1;
     		pf -= 1;
+    		pbuf -= 3;
 
-    		//buf_io_putf_tl(points[s].value._f, pbuf); //Access the value in uint8 mode (type 8)
     		x = 4; 	//Size of float variable
 
     	}
@@ -573,6 +572,7 @@ static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
     	if(points[i].address == p_address) //Find the position in array correspondent of the point address
     	{
     		s = i;
+    		break;
     	}
     }
 
@@ -624,7 +624,7 @@ static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
     	else if(*pbuf == 0x06)
     	{
     		pbuf += 1;
-    		buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ull64);
+    		buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ull64);
     	}
     	else if(*pbuf == 0x07)
     	{
@@ -634,7 +634,22 @@ static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
     	else if(*pbuf == 0x08)
     	{
     		pbuf += 1;
-    		buf_io_putf_tb(buf_io_getf_fb(pbuf), &points[s].value._f);
+    		uint8_t *pf;
+    		pf = (uint8_t *) &points[s].value._f;
+    		pf += 3;
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf -= 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf -= 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf -= 1;
+
+    		*pf = *pbuf;
     	}
     	else if(*pbuf == 0x09)
     	{

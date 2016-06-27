@@ -21,7 +21,7 @@ extern "C" {
 #define MANUF    "EMPIRE"
 #define ID       1666111666
 #define REV      1
-#define N_POINT  4 //Contar quantos points tinha
+#define N_POINT  10 //Contar quantos points tinha
 
 
 typedef union point_type_u
