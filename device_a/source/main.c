@@ -460,17 +460,8 @@ static void decode_and_answer_description(frame_t *frame, uint8_t p_address)
 
 static void decode_and_answer_read(frame_t *frame, uint8_t p_address)
 {
-	uint8_t s, x = 0;
+	uint8_t s, t,  x = 0;
 	uint8_t *pbuf = frame->buffer;
-
-    // troca dst/src
-    s = frame->cmd.dst;
-    buf_io_put8_tb(frame->cmd.src, pbuf);
-    pbuf += 1;
-    buf_io_put8_tb(s, pbuf);
-    pbuf += 1;
-    buf_io_put8_tb(frame->cmd.reg, pbuf);
-    pbuf += 3; //Pula 3 bytes diretamente para o value
 
     for(int i = 0; i < N_POINT; i++)
     {
@@ -480,87 +471,102 @@ static void decode_and_answer_read(frame_t *frame, uint8_t p_address)
     	}
     }
 
-    if(points[s].type == 0x00)
-    {
-    	buf_io_put8_tb(points[s].value._ui8, pbuf); //Access the value in uint8 mode (type 0)
-    	x = 1; 	//Size of byte variable
-    }
-    else if(points[s].type == 0x01)
-    {
-    	buf_io_put8_tb(points[s].value._i8, pbuf); //Access the value in uint8 mode (type 1)
-    	x = 1; 	//Size of byte variable
-    }
-    else if(points[s].type == 0x02)
-    {
-    	buf_io_put16_tb(points[s].value._us16, pbuf); //Access the value in uint8 mode (type 2)
-    	x = 2; 	//Size of short variable
-    }
-    else if(points[s].type == 0x03)
-    {
-    	buf_io_put16_tb(points[s].value._s16, pbuf); //Access the value in uint8 mode (type 3)
-    	x = 2; 	//Size of short variable
-    }
-    else if(points[s].type == 0x04)
-    {
-    	buf_io_put32_tb(points[s].value._ul32, pbuf); //Access the value in uint8 mode (type 4)
-    	x = 4; 	//Size of long variable
-    }
-    else if(points[s].type == 0x05)
-    {
-    	buf_io_put32_tb(points[s].value._l32, pbuf); //Access the value in uint8 mode (type 5)
-    	x = 4; 	//Size of long variable
-    }
-    else if(points[s].type == 0x06)
-    {
-    	buf_io_put64_tb(points[s].value._ull64, pbuf); //Access the value in uint8 mode (type 6)
-    	x = 8; 	//Size of long long variable
-    }
-    else if(points[s].type == 0x07)
-    {
-    	buf_io_put64_tb(points[s].value._ll64, pbuf); //Access the value in uint8 mode (type 7)
-    	x = 8; 	//Size of long long variable
-    }
-    else if(points[s].type == 0x08)
-    {
-    	buf_io_putf_tb(points[s].value._f, pbuf); //Access the value in uint8 mode (type 8)
-    	x = 4; 	//Size of float variable
-    }
-    else if(points[s].type == 0x09)
-    {
-    	buf_io_putd_tb(points[s].value._d, pbuf); //Access the value in uint8 mode (type 9)
-    	x = 8; 	//Size of double variable
-    }
+    if((points[s].rights == 0)||(points[s].rights == 2)){
+    	// troca dst/src
+    	t = frame->cmd.dst;
+    	buf_io_put8_tb(frame->cmd.src, pbuf);
+    	pbuf += 1;
+    	buf_io_put8_tb(t, pbuf);
+    	pbuf += 1;
+    	buf_io_put8_tb(frame->cmd.reg, pbuf);
+    	pbuf += 3; //Pula 3 bytes diretamente para o value
 
-    pbuf -= 2; //Retorna o ponteiro para a posição do size no buffer
-    buf_io_put8_tb((1+x), pbuf);
-    pbuf += 1;
-	buf_io_put8_tb(points[s].type, pbuf);
+    	if(points[s].type == 0x00)
+    	{
+    		buf_io_put8_tl(points[s].value._ui8, pbuf); //Access the value in uint8 mode (type 0)
+    		x = 1; 	//Size of byte variable
+    	}
+    	else if(points[s].type == 0x01)
+    	{
+    		buf_io_put8_tl(points[s].value._i8, pbuf); //Access the value in uint8 mode (type 1)
+    		x = 1; 	//Size of byte variable
+    	}
+    	else if(points[s].type == 0x02)
+    	{
+    		buf_io_put16_tl(points[s].value._us16, pbuf); //Access the value in uint8 mode (type 2)
+    		x = 2; 	//Size of short variable
+    	}
+    	else if(points[s].type == 0x03)
+    	{
+    		buf_io_put16_tl(points[s].value._s16, pbuf); //Access the value in uint8 mode (type 3)
+    		x = 2; 	//Size of short variable
+    	}
+    	else if(points[s].type == 0x04)
+    	{
+    		buf_io_put32_tl(points[s].value._ul32, pbuf); //Access the value in uint8 mode (type 4)
+    		x = 4; 	//Size of long variable
+    	}
+    	else if(points[s].type == 0x05)
+    	{
+    		buf_io_put32_tl(points[s].value._l32, pbuf); //Access the value in uint8 mode (type 5)
+    		x = 4; 	//Size of long variable
+    	}
+    	else if(points[s].type == 0x06)
+    	{
+    		buf_io_put64_tl(points[s].value._ull64, pbuf); //Access the value in uint8 mode (type 6)
+    		x = 8; 	//Size of long long variable
+    	}
+    	else if(points[s].type == 0x07)
+    	{
+    		buf_io_put64_tl(points[s].value._ll64, pbuf); //Access the value in uint8 mode (type 7)
+    		x = 8; 	//Size of long long variable
+    	}
+    	else if(points[s].type == 0x08)
+    	{
+    		uint8_t *pf;
+    		pf = (uint8_t *) &points[s].value._f;
+    		pf += 3;
+    		*pbuf = *pf;
+    		pbuf += 1;
+    		pf -= 1;
 
-    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
-    send_frame(frame);
+    		*pbuf = *pf;
+    		pbuf += 1;
+    		pf -= 1;
+
+    		*pbuf = *pf;
+    		pbuf += 1;
+    		pf -= 1;
+
+    		*pbuf = *pf;
+    		pbuf += 1;
+    		pf -= 1;
+
+    		//buf_io_putf_tl(points[s].value._f, pbuf); //Access the value in uint8 mode (type 8)
+    		x = 4; 	//Size of float variable
+
+    	}
+    	else if(points[s].type == 0x09)
+    	{
+    		buf_io_putd_tl(buf_io_getd_fb(points[s].value._d), pbuf); //Access the value in uint8 mode (type 9)
+    		x = 8; 	//Size of double variable
+    	}
+
+    	pbuf -= 2; //Retorna o ponteiro para a posição do size no buffer
+    	buf_io_put8_tb((1+x), pbuf);
+    	pbuf += 1;
+    	buf_io_put8_tb(points[s].type, pbuf);
+
+    	frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+    	send_frame(frame);
+    }
 }
 
 
 static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
 {
-	uint8_t s, x = 0;
+	uint8_t s, t, x = 0;
 	uint8_t *pbuf = frame->buffer;
-
-    // troca dst/src
-    s = frame->cmd.dst;
-    buf_io_put8_tb(frame->cmd.src, pbuf);
-    pbuf += 1;
-    buf_io_put8_tb(s, pbuf);
-    pbuf += 1;
-    buf_io_put8_tb(frame->cmd.reg, pbuf);
-    pbuf += 1;
-    buf_io_put8_tb(0, pbuf);
-    pbuf += 1;
-
-    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
-    send_frame(frame);
-
-
 
     for(int i = 0; i < N_POINT; i++)
     {
@@ -570,62 +576,78 @@ static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
     	}
     }
 
-    if(*pbuf == 0x00)
-    {
+    if((points[s].rights == 1)||(points[s].rights == 2)){
+    	// troca dst/src
+    	t = frame->cmd.dst;
+    	buf_io_put8_tb(frame->cmd.src, pbuf);
     	pbuf += 1;
-        buf_io_put8_tb(buf_io_get8_fb(pbuf), &points[s].value._ui8);
-    }
-    else if(*pbuf == 0x01)
-    {
+    	buf_io_put8_tb(t, pbuf);
     	pbuf += 1;
-        buf_io_put8_tb(buf_io_get8_fb(pbuf), &points[s].value._i8);
-    }
-    else if(*pbuf == 0x02)
-    {
+    	buf_io_put8_tb(frame->cmd.reg, pbuf);
     	pbuf += 1;
-        buf_io_put16_tb(buf_io_get16_fb(pbuf), &points[s].value._us16);
-    }
-    else if(*pbuf == 0x03)
-    {
+    	buf_io_put8_tb(0, pbuf);
     	pbuf += 1;
-        buf_io_put16_tb(buf_io_get16_fb(pbuf), &points[s].value._s16);
-    }
-    else if(*pbuf == 0x04)
-    {
-    	pbuf += 1;
-        buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ul32);
-    }
-    else if(*pbuf == 0x05)
-    {
-    	pbuf += 1;
-        buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._l32);
-    }
-    else if(*pbuf == 0x06)
-    {
-    	pbuf += 1;
-        buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ull64);
-    }
-    else if(*pbuf == 0x07)
-    {
-    	pbuf += 1;
-        buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ll64);
-    }
-    else if(*pbuf == 0x08)
-    {
-    	pbuf += 1;
-        buf_io_putf_tb(buf_io_getf_fb(pbuf), &points[s].value._f);
-    }
-    else if(*pbuf == 0x09)
-    {
-    	pbuf += 1;
-        buf_io_putd_tb(buf_io_getd_fb(pbuf), &points[s].value._d);
-    }
 
+    	frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
+    	send_frame(frame);
+
+    	if(*pbuf == 0x00)
+    	{
+    		pbuf += 1;
+    		buf_io_put8_tb(buf_io_get8_fb(pbuf), &points[s].value._ui8);
+    	}
+    	else if(*pbuf == 0x01)
+    	{
+    		pbuf += 1;
+    		buf_io_put8_tb(buf_io_get8_fb(pbuf), &points[s].value._i8);
+    	}
+    	else if(*pbuf == 0x02)
+    	{
+    		pbuf += 1;
+    		buf_io_put16_tb(buf_io_get16_fb(pbuf), &points[s].value._us16);
+    	}
+    	else if(*pbuf == 0x03)
+    	{
+    		pbuf += 1;
+    		buf_io_put16_tb(buf_io_get16_fb(pbuf), &points[s].value._s16);
+    	}
+    	else if(*pbuf == 0x04)
+    	{
+    		pbuf += 1;
+    		buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ul32);
+    	}
+    	else if(*pbuf == 0x05)
+    	{
+    		pbuf += 1;
+    		buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._l32);
+    	}
+    	else if(*pbuf == 0x06)
+    	{
+    		pbuf += 1;
+    		buf_io_put32_tb(buf_io_get32_fb(pbuf), &points[s].value._ull64);
+    	}
+    	else if(*pbuf == 0x07)
+    	{
+    		pbuf += 1;
+    		buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ll64);
+    	}
+    	else if(*pbuf == 0x08)
+    	{
+    		pbuf += 1;
+    		buf_io_putf_tb(buf_io_getf_fb(pbuf), &points[s].value._f);
+    	}
+    	else if(*pbuf == 0x09)
+    	{
+    		pbuf += 1;
+    		buf_io_putd_tb(buf_io_getd_fb(pbuf), &points[s].value._d);
+    	}
+    }
 }
 
 
 static void answer_frame(frame_t *frame)
 {
+	uint8_t i;
 
 	if(frame->cmd.reg == CMD_ITF_VER){
 		decode_and_answer_version(frame);
@@ -635,19 +657,19 @@ static void answer_frame(frame_t *frame)
 	}
 	else
 	{
-		for(int i=1; i<32; i++)
+		for(i = 1; i < 32; i++)
 		{
 			if(frame->cmd.reg == CMD_POINT_DESC_BASE+i)
 			{
 				decode_and_answer_description(frame, i);
 				break;
 			}
-			if(frame->cmd.reg == CMD_POINT_READ_BASE+i)
+			else if(frame->cmd.reg == CMD_POINT_READ_BASE+i)
 			{
 				decode_and_answer_read(frame, i);
 				break;
 			}
-			if(frame->cmd.reg == CMD_POINT_WRITE_BASE+i)
+			else if(frame->cmd.reg == CMD_POINT_WRITE_BASE+i)
 			{
 				decode_and_answer_write(frame, i);
 				break;
@@ -711,8 +733,23 @@ static void setup_leds(void)
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15|GPIO_PIN_14|GPIO_PIN_13|GPIO_PIN_12, GPIO_PIN_RESET);
 }
 
+static void setup_switch(void)
+{
+	GPIO_InitTypeDef  GPIO_inp;
+    __GPIOA_CLK_ENABLE();  // liga o clock para a porta A
+
+    GPIO_inp.Pin = GPIO_PIN_0;
+    GPIO_inp.Mode = GPIO_MODE_INPUT;
+    GPIO_inp.Pull = GPIO_NOPULL;
+    GPIO_inp.Speed = GPIO_SPEED_FAST;
+
+    HAL_GPIO_Init(GPIOA, &GPIO_inp);
+}
+
 int main(void)
 {
+	uint8_t switch_value;
+
     HAL_Init();
     SystemClock_Config();
     HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000);
@@ -721,6 +758,7 @@ int main(void)
     circ_buffer_init(&cb,cb_area,CMD_MAX_SIZE);
     new_frame = 0;
     
+    setup_switch();
     setup_leds();
     setup_uart();
     uart3_enable_int();
@@ -731,6 +769,14 @@ int main(void)
     if(check_points()){
         while(1)
         {
+        	//leituras sensores
+        	points[1].value._ui8 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+
+        	if(points[0].value._ui8 == 1)
+        		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+        	else if(points[0].value._ui8 == 0)
+        	    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+
             if(new_frame)
             {
                 // indica a comunicacao
