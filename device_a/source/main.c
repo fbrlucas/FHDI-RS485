@@ -8,7 +8,6 @@
 #include "crc16.h"
 #include "device_info.h"
 
-// Debug tip:
 // Connect to target, reset (black button), then load and press c
 uint32_t id = ID;
 uint8_t cb_area[CMD_MAX_SIZE];
@@ -16,55 +15,14 @@ volatile uint8_t new_frame = 0;
 circ_buffer_t cb;
 frame_t frame;
 
-//Put here the name of the structs declarated in device_info.c file.
-//-------------------------------------------------------------------------------
-//extern point_t point_1;
-//extern point_t point_2;
 extern point_t points[N_POINT];
-//-------------------------------------------------------------------------------
 
 static void SystemClock_Config(void);
 static void Error_Handler(void);
 
 UART_HandleTypeDef uart_dev3;
-
-/*
-static void initialize_points(){
-	char address[] = P_ADDRESSES;
-	uint8_t j = 0;
-	uint8_t x = strlen(address);
-	uint8_t count=0;
-	uint8_t ad[2];
-	address[4] = ' ';
-
-	for(int i = 0; i <= x; i++){
-		if((address[i] != ',')&&(address[i] != ' '))
-		{
-			ad[j] = address[i];
-			j++;
-		}
-		else
-		{
-			points[count].address = atoi(ad);
-			count++;
-			j = 0;
-		}
-	}
-	uint8_t add;
-	for(int k = 0; k <= N_POINT; k++){
-		add = points[k].address;
-		strncpy(points[k].name, P_NAME(add) "        ", 8);
-	}
-
-	for(int i = 0; i < N_POINT; i++){
-		for(int k = 0; k < 8; k++){
-			points[i].name[k] = ?;
-		}
-		points[i].type = P_TYPE(ad);
-	}
-
-
-}*/
+ADC_HandleTypeDef adc_dev;
+TIM_HandleTypeDef tim4;
 
 static void setup_uart(void)
 {
@@ -88,6 +46,133 @@ static void setup_uart(void)
     if(HAL_UART_Init(&uart_dev3) != HAL_OK)
         Error_Handler();        
 
+}
+
+void setup_adc(void)
+{
+    ADC_ChannelConfTypeDef channel;
+    GPIO_InitTypeDef  adc_pin;
+
+    // Ligando os clocks
+    __HAL_RCC_ADC1_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+
+    // Setup do pino
+    adc_pin.Pin = GPIO_PIN_0;
+    adc_pin.Mode = GPIO_MODE_ANALOG;
+    adc_pin.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &adc_pin);
+
+    // CONFIGURAÇÕES GERAIS DO ADC
+    // Qual ADC ? 1, 2 ou 3?
+    adc_dev.Instance = ADC1;
+    // Do manual, máximo é 30MHz (APB2/4 = 84/4 = 21MHz)
+    adc_dev.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV4;
+    // Qual resolução ?
+    adc_dev.Init.Resolution = ADC_RESOLUTION_12B;
+    // Conversão multi channel ou single channel  ?
+    adc_dev.Init.ScanConvMode = DISABLE;
+    // Fica lendo continuamente ou somente uma vez ?
+    adc_dev.Init.ContinuousConvMode = DISABLE;
+    // Algum tipo de leitura discontínua ? Se sim, quantas ?
+    adc_dev.Init.DiscontinuousConvMode = DISABLE;
+    adc_dev.Init.NbrOfDiscConversion = 0;
+    // Alguma fonte externa que inicia a conversão ?
+    adc_dev.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+    adc_dev.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T1_CC1;
+    // Alinha à direita ou esquerda ?
+    adc_dev.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+    // Quantas conversões serão feitas ? (multi channel, 1 a 16)
+    adc_dev.Init.NbrOfConversion = 1;
+    // Vamos usar DMA ?
+    adc_dev.Init.DMAContinuousRequests = DISABLE;
+    // Interrupção no fim do scan ou no fim de cada canal ?
+    adc_dev.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+
+    if(HAL_ADC_Init(&adc_dev) != HAL_OK)
+      Error_Handler();
+
+    // CONFIGURAÇÕES DO/DOS CANAL/CANAIS
+
+    // Qual canal está sendo confgurado ?
+    channel.Channel = ADC_CHANNEL_8;
+    // Posição ?
+    channel.Rank = 1;
+    // Tempo de conversão usado ?
+    channel.SamplingTime = ADC_SAMPLETIME_28CYCLES;
+    // Não usado
+    channel.Offset = 0;
+
+    if(HAL_ADC_ConfigChannel(&adc_dev, &channel) != HAL_OK)
+      Error_Handler();
+}
+
+static void setup_leds(void)
+{
+    GPIO_InitTypeDef  GPIO_out;
+
+    // liga o clock para a porta D
+    __GPIOD_CLK_ENABLE();
+
+    // setup dos pinos PD15-PD12
+    GPIO_out.Pin = GPIO_PIN_15|GPIO_PIN_14;
+    GPIO_out.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_out.Pull = GPIO_PULLUP;
+    GPIO_out.Speed = GPIO_SPEED_FAST;
+
+    HAL_GPIO_Init(GPIOD, &GPIO_out);
+
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15|GPIO_PIN_14, GPIO_PIN_RESET);
+}
+
+static void setup_switch(void)
+{
+	GPIO_InitTypeDef  GPIO_inp;
+    __GPIOA_CLK_ENABLE();  // liga o clock para a porta A
+
+    GPIO_inp.Pin = GPIO_PIN_0;
+    GPIO_inp.Mode = GPIO_MODE_INPUT;
+    GPIO_inp.Pull = GPIO_NOPULL;
+    GPIO_inp.Speed = GPIO_SPEED_FAST;
+
+    HAL_GPIO_Init(GPIOA, &GPIO_inp);
+}
+
+void setup_tim4(void)
+{
+  TIM_OC_InitTypeDef pwm_chan;
+
+  GPIO_InitTypeDef GPIO_InitStruct;
+
+  // habilita o tim4
+  __TIM4_CLK_ENABLE();
+  // habilita o clock para as portas
+  __GPIOD_CLK_ENABLE();
+
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
+
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  tim4.Instance = TIM4;
+  tim4.Init.Prescaler = 27;
+  tim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  tim4.Init.Period = 59999;
+  tim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  HAL_TIM_PWM_Init(&tim4);
+
+  // configura cada canal
+  pwm_chan.OCMode = TIM_OCMODE_PWM1;
+  pwm_chan.Pulse = 14999;
+  pwm_chan.OCPolarity = TIM_OCPOLARITY_HIGH;
+  pwm_chan.OCFastMode = TIM_OCFAST_DISABLE;
+  HAL_TIM_PWM_ConfigChannel(&tim4, &pwm_chan, TIM_CHANNEL_1);
+
+  // habilita cada canal de pwm
+  HAL_TIM_PWM_Start(&tim4, TIM_CHANNEL_1);
 }
 
 static void uart3_enable_int(void)
@@ -136,7 +221,6 @@ static uint8_t add_byte(uint8_t b)
     return 0;
 }
 
-
 void USART3_IRQHandler(void)
 {
     uint8_t c;
@@ -166,7 +250,7 @@ void USART3_IRQHandler(void)
             if(add_byte(c))
                 new_frame = 1;
         }
-    }   
+    }
 }
 
 static void uart3_send_byte(uint8_t c, uint8_t with_esc)
@@ -184,7 +268,6 @@ static void uart3_send_byte(uint8_t c, uint8_t with_esc)
             while( !(USART3->SR & USART_FLAG_TXE)) {}
         }
     }
-    
     // transmite
     USART3->DR = c;
 }
@@ -240,9 +323,6 @@ static uint8_t check_frame(circ_buffer_t *cb, frame_t *frame)
     // tamanho
     if(circ_buffer_get(cb, &(frame->cmd.size)) != CIRC_BUFFER_OK)
         return 0;
-    
-    // verificar consistência do tamanho aqui ! ---------------------------------------------------------------FAZER--------------------------------------------------------
-    // TODO
     
     // payload (size bytes)
     for(n = 0 ; n < frame->cmd.size ; n++)
@@ -316,46 +396,23 @@ static uint8_t check_points()
     return 1;
 }
 
-#if 0
-void complet_string(char *str1, char x[8]){
-	uint8_t n;
-	char spaces[8] = {' ',' ',' ',' ',' ',' ',' ',' '};
-	strcpy(str1, x);
-    n = (8- strlen(str1));
-    strncat(str1, spaces, n);
-}
-#endif
 static void decode_and_answer_version(frame_t *frame)
 {
     uint8_t c;
-    
     // troca dst/src
     c = frame->cmd.dst;
-#if 0
-    frame->cmd.dst = frame->cmd.src;
-    frame->cmd.src = c;
-    // informa a vers�o no payload
-    frame->cmd.payload[0] = CMD_VERSION;
-    // ajusta o tamanho
-    frame->cmd.size = 1;
-    // calcula o crc
-    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
-#endif
-#if 1
     buf_io_put8_tb(frame->cmd.src, &frame->cmd.dst);
     buf_io_put8_tb(c, &frame->cmd.src);
     buf_io_put8_tb(CMD_VERSION, &frame->cmd.payload[0]);
     buf_io_put8_tb(1, &frame->cmd.size);
 	//buf_io_put16_tb(crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size), &frame->cmd.crc);
 	frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
-#endif
     // envia
     send_frame(frame);
 }
 
 static void decode_and_answer_identification(frame_t *frame)
 {
-    //char str[8];
     uint8_t s;
     uint8_t *pbuf = frame->buffer;
 
@@ -382,46 +439,6 @@ static void decode_and_answer_identification(frame_t *frame)
 
     send_frame(frame);
 }
-#if 0
-static void decode_and_answer_identification(frame_t *frame)
-{
-    uint8_t c;
-    char str[8];
-
-    // troca dst/src
-    c = frame->cmd.dst;
-    buf_io_put8_tb(frame->cmd.src, &frame->cmd.dst);
-    buf_io_put8_tb(c, &frame->cmd.src);
-    // ajusta o tamanho
-    buf_io_put8_tb(22, &frame->cmd.size);
-    // informa o modelo
-    complet_string(&str, MODEL);
-    for(int i=0; i<8; i++)
-    	buf_io_put8_tb((uint8_t)str[i], &frame->cmd.payload[i]);
-    // informa a manufatura
-    complet_string(&str, MANUF);
-    for(int i=8; i<16; i++)
-    	buf_io_put8_tb((uint8_t)str[i-8], &frame->cmd.payload[i]);
-    // informa o ID
-    buf_io_put8_tb((uint8_t)(id >> 24), &frame->cmd.payload[16]);
-    buf_io_put8_tb((uint8_t)(id >> 16), &frame->cmd.payload[17]);
-    buf_io_put8_tb((uint8_t)(id >> 8), &frame->cmd.payload[18]);
-    buf_io_put8_tb((uint8_t)(id), &frame->cmd.payload[19]);
-
-    // informa a revisao
-    buf_io_put8_tb(REV, &frame->cmd.payload[20]);
-    // informa a revisao
-    buf_io_put8_tb(POINT, &frame->cmd.payload[21]);
-
-    // calcula o CRC
-    frame->cmd.crc = crc16_calc(frame->buffer, CMD_HDR_SIZE+frame->cmd.size);
-    buf_io_put8_tb((frame->cmd.crc), &crc1[0]);
-    buf_io_put8_tb((frame->cmd.crc >> 8), &crc1[1]);
-    
-    // envia
-    send_frame(frame);
-}
-#endif
 
 static void decode_and_answer_description(frame_t *frame, uint8_t p_address)
 {
@@ -564,7 +581,7 @@ static void decode_and_answer_read(frame_t *frame, uint8_t p_address)
 
 static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
 {
-	uint8_t s, t, x = 0;
+	uint8_t s, t;
 	uint8_t *pbuf = frame->buffer;
 
     for(int i = 0; i < N_POINT; i++)
@@ -624,12 +641,80 @@ static void decode_and_answer_write(frame_t *frame, uint8_t p_address)
     	else if(*pbuf == 0x06)
     	{
     		pbuf += 1;
-    		buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ull64);
+
+    		uint8_t *pf;
+    		pf = (uint8_t *) &points[s].value._ll64;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
     	}
     	else if(*pbuf == 0x07)
     	{
     		pbuf += 1;
-    		buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ll64);
+
+    		uint8_t *pf;
+    		pf = (uint8_t *) &points[s].value._ull64;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+
+    		*pf = *pbuf;
+    		pbuf += 1;
+    		pf += 1;
+
+    		*pf = *pbuf;
+
+    		//buf_io_put64_tb(buf_io_get64_fb(pbuf), &points[s].value._ll64);
     	}
     	else if(*pbuf == 0x08)
     	{
@@ -691,80 +776,42 @@ static void answer_frame(frame_t *frame)
 			}
 		}
 	}
-
-	#if 0
-    switch(frame->cmd.reg)
-    { 
-        case CMD_ITF_VER:
-            decode_and_answer_version(frame);
-            break;          
-        case CMD_IDENT:
-        	decode_and_answer_identification(frame);
-            break;
-        //case CMD_POINT_DESC_BASE
-
-        //for(int i=0; i<31; i++){
-			//case point_desc+i:
-			//decode_and_answer_description(frame, i);
-			//case CMD_POINT_DESC_BASE+1:
-			//case CMD_POINT_DESC_BASE+2:
-		case (num2+num):
-			// uint8_t p = frame->cmd.reg - CMD_POINT_DESC_BASE;
-			break;
-
-        case CMD_POINT_READ_BASE:
-        case CMD_POINT_READ_BASE+1:
-        case CMD_POINT_READ_BASE+2:
-        //case CMD_POINT_READ_BASE+n:
-        // uint8_t p = frame->cmd.reg - CMD_POINT_READ_BASE;        
-            break;  
-        case CMD_POINT_WRITE_BASE:
-        case CMD_POINT_WRITE_BASE+1:
-        case CMD_POINT_WRITE_BASE+2:
-        //case CMD_POINT_WRITE_BASE+n:
-        // uint8_t p = frame->cmd.reg - CMD_POINT_WRITE_BASE;        
-            break; 
-        default:
-            break;
-    }
-#endif
 }
 
-static void setup_leds(void)
+void change_pwm()
 {
-    GPIO_InitTypeDef  GPIO_out;
-    
-    // liga o clock para a porta D
-    __GPIOD_CLK_ENABLE();  
-
-    // setup dos pinos PD15-PD12
-    GPIO_out.Pin = GPIO_PIN_15|GPIO_PIN_14|GPIO_PIN_13|GPIO_PIN_12;
-    GPIO_out.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_out.Pull = GPIO_PULLUP;
-    GPIO_out.Speed = GPIO_SPEED_FAST;
-
-    HAL_GPIO_Init(GPIOD, &GPIO_out);
-
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15|GPIO_PIN_14|GPIO_PIN_13|GPIO_PIN_12, GPIO_PIN_RESET);
+	uint16_t v;
+	v = (uint16_t)(points[3].value._f * 100);
+	if(v <= 100){
+		v = v*599;
+		TIM4->CCR1 = v;
+	}
 }
 
-static void setup_switch(void)
+void read_ad()
 {
-	GPIO_InitTypeDef  GPIO_inp;
-    __GPIOA_CLK_ENABLE();  // liga o clock para a porta A
+	HAL_ADC_Start(&adc_dev);
+	// espera até 2000ms para que a conversão finalize ou aborta
+	if(HAL_ADC_PollForConversion(&adc_dev, 2000) == HAL_OK)
+	{
+		points[2].value._f = (float)((HAL_ADC_GetValue(&adc_dev)* (0.122070)-14.0));
+	}
+}
 
-    GPIO_inp.Pin = GPIO_PIN_0;
-    GPIO_inp.Mode = GPIO_MODE_INPUT;
-    GPIO_inp.Pull = GPIO_NOPULL;
-    GPIO_inp.Speed = GPIO_SPEED_FAST;
+void change_led()
+{
+	if(points[0].value._ui8 == 1)
+		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+	else if(points[0].value._ui8 == 0)
+		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+}
 
-    HAL_GPIO_Init(GPIOA, &GPIO_inp);
+void read_switch(){
+	points[1].value._ui8 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
 }
 
 int main(void)
 {
-	uint8_t switch_value;
-
     HAL_Init();
     SystemClock_Config();
     HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000);
@@ -777,6 +824,8 @@ int main(void)
     setup_leds();
     setup_uart();
     uart3_enable_int();
+    setup_adc();
+    setup_tim4();
     
     //Enable RX
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10, GPIO_PIN_RESET); 
@@ -784,13 +833,13 @@ int main(void)
     if(check_points()){
         while(1)
         {
-        	//leituras sensores
-        	points[1].value._ui8 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+        	//leitura e escrita sensores
+        	read_switch();
+        	change_led();
+            read_ad();
+            change_pwm();
 
-        	if(points[0].value._ui8 == 1)
-        		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-        	else if(points[0].value._ui8 == 0)
-        	    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+            HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON,PWR_SLEEPENTRY_WFI);
 
             if(new_frame)
             {
@@ -813,7 +862,6 @@ int main(void)
         }
     }
 
-    
     return 0;
 }
 
@@ -822,7 +870,6 @@ void HAL_SYSTICK_Callback(void)
 {
 
 }
-
 
 static void Error_Handler(void)
 {

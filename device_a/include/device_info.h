@@ -17,11 +17,11 @@ extern "C" {
 #define CMD_VERSION 1
 
 //Sensor Identification
-#define MODEL    "STARKIL1"
-#define MANUF    "EMPIRE"
-#define ID       1666111666
+#define MODEL    "GISELE"
+#define MANUF    "MODA"
+#define ID       1234567890
 #define REV      1
-#define N_POINT  10 //Contar quantos points tinha
+#define N_POINT  4 //Contar quantos points tinha
 
 
 typedef union point_type_u
